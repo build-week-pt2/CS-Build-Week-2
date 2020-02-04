@@ -74,6 +74,8 @@ class Player:
             }
         )
         response = dict(r.json())
+        print(f"Waiting {response['cooldown']} seconds for cooldown.")
+        sleep(response['cooldown'])
         pp.pprint(response)
         return response
 
@@ -115,6 +117,8 @@ class Player:
                 }
             )
         response = dict(r.json())
+        print(f"Waiting {response['cooldown']} seconds for cooldown.")
+        sleep(response['cooldown'])
         pp.pprint(response)
         return response
 
@@ -128,6 +132,8 @@ class Player:
             }
         )
         response = dict(r.json())
+        print(f"Waiting {response['cooldown']} seconds for cooldown.")
+        sleep(response['cooldown'])
         pp.pprint(response)
         return response
 
@@ -177,7 +183,10 @@ class Player:
     def change_name(self, new_name):
         r = requests.post(
             "https://lambda-treasure-hunt.herokuapp.com/api/adv/change_name/",
-            data = json.dumps({"name": [new_name]}),
+            data = json.dumps({
+                "name": [new_name],
+                "confirm": "aye"
+            }),
             headers = {
                 "Authorization": self.token,
                 "Content-Type": "application/json"
@@ -200,16 +209,6 @@ class Player:
         pp.pprint(response)
         return response
 
-    #def treasure_hunt(self, threshhold):
-        # while gold under threshhold
-        while self.status['gold'] < threshhold
-            #while encumbrance < strength
-            while self.status['encumbrance'] < self.status['strength']
-                # pick a random direction
-                # wise travel
-                # if item treasure
-                # pick it up
-            #go to shop and sell treasure
 
     def destination_travel(self, destination):
         destination_map = map_to_destination(self.current_room_id, destination)
@@ -218,3 +217,30 @@ class Player:
             direction = destination_map[str(self.current_room_id)]
             wise_travel_id = traversial_graph[str(self.current_room_id)][direction]
             self.move(direction, wise_travel_id)
+
+
+    def treasure_hunt(self, threshhold):
+        # while gold under threshhold
+        status = self.status()
+        while status['gold'] < threshhold:
+            #while encumbrance < strength
+            while status['encumbrance'] < status['strength'] - 1:
+                # pick a random direction
+                rand_direction = random.choice(list(traversial_graph[str(self.current_room_id)].keys()))
+                wise_travel_id = traversial_graph[str(self.current_room_id)][rand_direction]
+                # wise travel
+                movement = self.move(rand_direction, wise_travel_id)
+                status = self.status()
+                # if item treasure
+                if len(movement['items']) != 0:
+                    # pick it up
+                    for i in range(len(movement['items'])):
+                        if status['encumbrance'] < status['strength'] - 1:
+                            self.pickup(movement['items'][i])
+                            status = self.status()
+        #go to shop and sell treasure
+            self.destination_travel('Shop')
+            status = self.status()
+            for item in self.status()['inventory']:
+                self.sell(item)
+                status = self.status()
