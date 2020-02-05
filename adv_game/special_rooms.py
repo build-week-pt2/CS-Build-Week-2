@@ -15,3 +15,5 @@ def map_to_room_id(start_id, end_id):
                 traversial_graph[str(short_path[i])])[short_path[i+1]]
             directed_path.append(direction)
     return dict(zip(short_path, directed_path))
+
+important_rooms = {'mining_room':192}

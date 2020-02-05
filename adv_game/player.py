@@ -233,28 +233,49 @@ class Player:
         return response
 
 
-    def mine(self):
+    def valid_proof(self, last_proof, guess_proof, difficulty):
+        guess = f"{last_proof}{guess_proof}".encode()
+        guess_hash = hashlib.sha256(guess).hexdigest()
+        return guess_hash[:difficulty] == "0" * difficulty
+
+
+    def proof_of_work(self):
+        # Get the vars we need for valid proof
         proof_info = self.get_proof()
         last_proof = proof_info['proof']
         difficulty = proof_info['difficulty']
-        leading_zeros = '0' * difficulty
-        # Does hash(last_proof, proof) contain N leading zeroes
-        # where N is the current difficulty level?
-        proof = 0
-        guess = f'{last_proof}{proof}'.encode()
-        while guess.decode()[:difficulty] != leading_zeros:
-            guess = f'{last_proof}{proof}'.encode()
-            guess_hash = hashlib.sha256(guess).hexdigest()
-            print(guess.decode()[:difficulty])
-            print(leading_zeros)
-            proof += 1
-        new_proof = proof
-        r = requests.post(
-            base_url[:-4] + "bc/mine/",
-            data = json.dumps({"proof": new_proof}),
-            headers = base_header
+        guess_proof = 23
+        while self.valid_proof(last_proof, guess_proof, difficulty) is False:
+            guess_proof += 13
+        return guess_proof
+
+
+    def mine(self):
+        while True:
+            # Get your proof
+            proof = self.proof_of_work()
+            r = requests.post(
+                base_url[:-4] + "bc/mine/",
+                data = json.dumps({"proof": proof}),
+                headers = base_header
+            )
+            response = dict(r.json())
+            pp.pprint(response)
+            cooldown = response['cooldown']
+            time.sleep(cooldown)
+
+
+    def get_balance(self):
+        r = requests.get(
+            base_url[:-4] + "bc/get_balance/",
+            headers = {
+                "Authorization": self.token,
+                "Content-Type": "application/json"
+            }
         )
         response = dict(r.json())
+        print(f"Waiting {response['cooldown']} seconds for cooldown.")
+        sleep(response['cooldown'])
         pp.pprint(response)
         return response
 
