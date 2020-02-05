@@ -18,3 +18,13 @@ def map_to_destination(start_id, destination):
                 traversial_graph[str(short_path[i])])[short_path[i+1]]
             directed_path.append(direction)
     return dict(zip(short_path, directed_path))
+
+def map_to_room_id(start_id, end_id):
+    short_path = bfs(str(start_id), str(end_id))
+    directed_path = []
+    for i in range(len(short_path) + 1):
+        if i + 1 < len(short_path):
+            direction = reverse_dict(
+                traversial_graph[str(short_path[i])])[short_path[i+1]]
+            directed_path.append(direction)
+    return dict(zip(short_path, directed_path))
