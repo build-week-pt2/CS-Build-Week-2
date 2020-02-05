@@ -18,9 +18,12 @@ base_header = {
     "Content-Type": "application/json"
 }
 
-r = requests.get("https://raw.githubusercontent.com/build-week-pt2/CS-Build-Week-2/matt/room_info.json")
+r = requests.get("https://raw.githubusercontent.com/build-week-pt2"
+                 "/CS-Build-Week-2/matt/room_info.json")
 room_information = dict(r.json())
-r = requests.get("https://raw.githubusercontent.com/build-week-pt2/CS-Build-Week-2/matt/room_map.json")
+
+r = requests.get("https://raw.githubusercontent.com/build-week-pt2"
+                 "/CS-Build-Week-2/matt/room_map.json")
 traversial_graph = dict(r.json())
 
 
@@ -34,15 +37,16 @@ class Player:
             headers = {"Authorization": self.token}
         )
         response = dict(r.json())
-        self.current_room_id = response['room_id']
+        print(f"Waiting {response['cooldown']} seconds for cooldown.")
+        sleep(response['cooldown'])
+        self.current_rm = str(response['room_id'])
         pp.pprint(response)
 
 
-
     def move(self, direction, wise_travel = None):
-        next_room_id = traversial_graph[str(self.current_room_id)][direction]
+        next_room_id = traversial_graph[self.current_rm][direction]
         condition_1 = room_information[next_room_id]['elevation'] > 0
-        condition_2 = 'fly' in self.status()['abilities']
+        condition_2 = 'fly' in self.status(show = False)['abilities']
         if condition_1 and condition_2:
             r = requests.post(
                 base_url + "fly/",
@@ -68,7 +72,7 @@ class Player:
         response = dict(r.json())
         print(f"Waiting {response['cooldown']} seconds for cooldown.")
         sleep(response['cooldown'])
-        self.current_room_id = response['room_id']
+        self.current_rm = str(response['room_id'])
         pp.pprint(response)
         return response
 
@@ -113,7 +117,7 @@ class Player:
         return response
 
 
-    def status(self):
+    def status(self, show = True):
         r = requests.post(
             base_url + "status/",
             headers = base_header
@@ -121,7 +125,8 @@ class Player:
         response = dict(r.json())
         print(f"Waiting {response['cooldown']} seconds for cooldown.")
         sleep(response['cooldown'])
-        pp.pprint(response)
+        if show == True:
+            pp.pprint(response)
         return response
 
 
@@ -192,7 +197,27 @@ class Player:
             headers = base_header
         )
         response = dict(r.json())
+        print(f"Waiting {response['cooldown']} seconds for cooldown.")
+        sleep(response['cooldown'])
         pp.pprint(response)
+        return response
+
+
+    def dash(self, direction, num_rooms, next_ids):
+        r = requests.post(
+            base_url + "dash/",
+            data = json.dumps({
+                "direction": direction,
+                "num_rooms": str(num_rooms),
+                "next_room_ids": ','.join(next_ids)
+            }),
+            headers = base_header
+        )
+        response = dict(r.json())
+        print(f"Waiting {response['cooldown']} seconds for cooldown.")
+        sleep(response['cooldown'])
+        pp.pprint(response)
+        self.current_rm = str(response['room_id'])
         return response
 
 
@@ -235,27 +260,63 @@ class Player:
 
 
     def destination_travel_id(self, destination):
-        destination_map = map_to_room_id(self.current_room_id, destination)
+        destination_map = map_to_room_id(int(self.current_rm), destination)
+        cur_title = room_information[self.current_rm]["title"]
 
-        while room_information[str(self.current_room_id)]["title"] != destination:
-            direction = destination_map[str(self.current_room_id)]
-            wise_travel_id = traversial_graph[str(self.current_room_id)][direction]
-            self.move(direction, wise_travel_id)
+        while cur_title != destination:
+            direction = destination_map[self.current_rm]
+            wise_id = traversial_graph[self.current_rm][direction]
+            self.move(direction, wise_id)
+
+
+    def go_fast(self, destination):
+        # While the current room isn't the destination
+        while self.current_rm != str(destination):
+            # Find the shortest path of room IDs
+            short_path = bfs(self.current_rm, str(destination))
+
+            # Find the directions we need to go
+            directed_path = []
+            for i in range(len(short_path) + 1):
+                if i + 1 < len(short_path):
+                    direction = reverse_dict(
+                        traversial_graph[str(short_path[i])])[short_path[i+1]]
+                    directed_path.append((direction, short_path[i]))
+            # directed path [(exit_direction, room_id), ...]
+
+            i = 0
+            move = directed_path[0][0]
+            dash_path = []
+            while directed_path[i][0] == move and len(directed_path) > 2:
+                dash_path.append(directed_path[i][1])
+                i += 1
+            if len(dash_path) > 2:
+                print(f"dash_path: {dash_path}")
+                self.dash(direction = move,
+                          num_rooms = len(dash_path) - 1,
+                          next_ids = dash_path[1:])
+            elif len(directed_path) == 1:
+                self.move(direction = directed_path[0][0],
+                          wise_travel = short_path[-1])
+            else:
+                self.move(direction = directed_path[0][0],
+                          wise_travel = directed_path[1][1])
+        return
 
 
     def treasure_hunt(self, threshhold):
         # while gold under threshhold
-        status = self.status()
+        status = self.status(show = False)
         while status['gold'] < threshhold:
             #while encumbrance < strength
             while status['encumbrance'] < status['strength'] - 1:
                 # pick a random direction
-                rand_direction = random.choice(list(traversial_graph[str(self.current_room_id)].keys()))
-                wise_travel_id = traversial_graph[str(self.current_room_id)][rand_direction]
+                possible = traversial_graph[self.current_rm].keys()
+                rand_direction = random.choice(list(possible))
+                wise_id = traversial_graph[self.current_rm][rand_direction]
                 # wise travel
-                movement = self.move(rand_direction, wise_travel_id)
-                status = self.status()
-                # if item treasure
+                movement = self.move(rand_direction, wise_id)
+                status = self.status(show = False)
                 if len(movement['items']) != 0:
                     # pick it up
                     for i in range(len(movement['items'])):
@@ -264,7 +325,7 @@ class Player:
                             status = self.status()
             #go to shop and sell treasure
             self.destination_travel('Shop')
-            status = self.status()
-            for item in self.status()['inventory']:
+            status = self.status(show = False)
+            for item in status['inventory']:
                 self.sell(item)
                 status = self.status()
