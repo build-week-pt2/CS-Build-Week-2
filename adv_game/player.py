@@ -5,6 +5,7 @@ from time import sleep
 import random
 import sys
 import pprint
+import hashlib
 pp = pprint.PrettyPrinter(indent=4)
 
 from special_rooms import *
@@ -12,6 +13,10 @@ from special_rooms import *
 #my_token = sys.argv[1]
 my_token = "Token 8cbfe26a8dfa5c74154406bccd621a8a345afd04"
 base_url = "https://lambda-treasure-hunt.herokuapp.com/api/adv/"
+base_header = {
+    "Authorization": my_token,
+    "Content-Type": "application/json"
+}
 
 r = requests.get("https://raw.githubusercontent.com/build-week-pt2/CS-Build-Week-2/matt/room_info.json")
 room_information = dict(r.json())
@@ -41,10 +46,7 @@ class Player:
             r = requests.post(
                 "https://lambda-treasure-hunt.herokuapp.com/api/adv/move/",
                 data = json.dumps({"direction": direction}),
-                headers = {
-                    "Authorization": self.token,
-                    "Content-Type": "application/json"
-                }
+                headers = base_header
             )
         else:
             r = requests.post(
@@ -53,10 +55,7 @@ class Player:
                     "direction": direction,
                     "next_room_id": wise_travel
                     }),
-                headers = {
-                    "Authorization": self.token,
-                    "Content-Type": "application/json"
-                }
+                headers = base_header
             )
         response = dict(r.json())
         print(f"Waiting {response['cooldown']} seconds for cooldown.")
@@ -76,10 +75,7 @@ class Player:
         r = requests.post(
             "https://lambda-treasure-hunt.herokuapp.com/api/adv/take/",
             data = json.dumps({"name": item}),
-            headers = {
-                "Authorization": self.token,
-                "Content-Type": "application/json"
-            }
+            headers = base_header
         )
         response = dict(r.json())
         print(f"Waiting {response['cooldown']} seconds for cooldown.")
@@ -92,46 +88,63 @@ class Player:
         r = requests.post(
             "https://lambda-treasure-hunt.herokuapp.com/api/adv/drop/",
             data = json.dumps({"name": item}),
-            headers = {
-                "Authorization": self.token,
-                "Content-Type": "application/json"
-            }
+            headers = base_header
         )
         response = dict(r.json())
         pp.pprint(response)
         return response
 
-    # def get_last_proof(self):
-    #     r = requests.get(
-    #         "https://lambda-treasure-hunt.herokuapp.com/api/bc/last_proof/",
-    #         headers = {
-    #             "Authorization": self.token,
-    #             "Content-Type": "application/json"
-    #         }
-    #     )
-    #     response = dict(r.json())
-    #     pp.pprint(response)
-    #     self.last_proof = response['proof']
-    #     return response
+    def get_last_proof(self):
+        r = requests.get(
+            "https://lambda-treasure-hunt.herokuapp.com/api/bc/last_proof/",
+            headers = base_header
+        )
+        response = dict(r.json())
+        pp.pprint(response)
+        return response
 
-    # def mine(self, difficulty):
-    #     self.mining = True
-    #     while(self.mining == True):
-    #         def valid_proof(last_proof, proof):
-    #             encoded_proof = str(proof).encode()
-    #             hashed_proof = hashlib.sha256(encoded_proof).hexdigest()
-    #             return
-    #         r = requests.post(
-    #             "https://lambda-treasure-hunt.herokuapp.com/api/bc/mine/",
-    #             data = json.dumps({"proof": proof}),
-    #             headers = {
-    #                 "Authorization": self.token,
-    #                 "Content-Type": "application/json"
-    #             }
-    #         )
-    #         response = dict(r.json())
-    #         pp.pprint(response)
-    #         return response
+    def valid_proof(self, last_proof, guess_proof, difficulty):
+        guess = f"{last_proof}{guess_proof}".encode()
+        guess_hash = hashlib.sha256(guess).hexdigest()
+        return guess_hash[:difficulty] == "0" * difficulty
+
+    def proof_of_work(self):
+        # Get the vars we need for valid proof
+        proof_info = self.get_last_proof()
+        last_proof = proof_info['proof']
+        difficulty = proof_info['difficulty']
+        guess_proof = 23
+        while self.valid_proof(last_proof, guess_proof, difficulty) is False:
+            guess_proof += 13
+        return guess_proof
+
+    def mine(self):
+        self.mining = True
+        while self.mining == True:
+            # Get your proof
+            proof = self.proof_of_work()
+            r = requests.post(
+                base_url[:-4] + "bc/mine/",
+                data = json.dumps({"proof": proof}),
+                headers = base_header
+            )
+            response = dict(r.json())
+            pp.pprint(response)
+            cooldown = response['cooldown']
+            time.sleep(cooldown)
+            if response['messages'] == ['New Block Forged']:
+                self.mining = False
+
+    def get_balance(self):
+        r = requests.get(
+            "https://lambda-treasure-hunt.herokuapp.com/api/bc/get_balance/",
+            headers = base_header
+        )
+        response = dict(r.json())
+        print(f"Waiting {response['cooldown']} seconds for cooldown.")
+        sleep(response['cooldown'])
+        pp.pprint(response)
+        return response
 
     def sell(self, item, confirm = True):
         if confirm == True:
@@ -141,19 +154,13 @@ class Player:
                     "name": item,
                     "confirm": "yes"
                 }),
-                headers = {
-                    "Authorization": self.token,
-                    "Content-Type": "application/json"
-                }
+                headers = base_header
             )
         else:
             r = requests.post(
                 "https://lambda-treasure-hunt.herokuapp.com/api/adv/sell/",
                 data = json.dumps({"name": item}),
-                headers = {
-                    "Authorization": self.token,
-                    "Content-Type": "application/json"
-                }
+                headers = base_header
             )
         response = dict(r.json())
         print(f"Waiting {response['cooldown']} seconds for cooldown.")
@@ -165,10 +172,7 @@ class Player:
     def status(self):
         r = requests.post(
             "https://lambda-treasure-hunt.herokuapp.com/api/adv/status/",
-            headers = {
-                "Authorization": self.token,
-                "Content-Type": "application/json"
-            }
+            headers = base_header
         )
         response = dict(r.json())
         print(f"Waiting {response['cooldown']} seconds for cooldown.")
@@ -181,23 +185,31 @@ class Player:
         r = requests.post(
             "https://lambda-treasure-hunt.herokuapp.com/api/adv/examine/",
             data = json.dumps({"name": name}),
-            headers = {
-                "Authorization": self.token,
-                "Content-Type": "application/json"
-            }
+            headers = base_header
         )
-        pp.pprint(r.text)
-        return r.text
+        response = dict(r.json())
+        pp.pprint(response)
+        return response
+
+    def examine_well(self):
+        r = requests.post(
+            base_url + "examine/",
+            data = json.dumps({"name": "well"}),
+            headers = base_header
+        )
+        response = r.text
+        pp.pprint(response)
+        with open("binary_file.txt", 'w') as f:
+            f.write(response)
+            f.close()
+        return response
 
 
     def wear(self, item):
         r = requests.post(
             "https://lambda-treasure-hunt.herokuapp.com/api/adv/wear/",
             data = json.dumps({"name": [item]}),
-            headers = {
-                "Authorization": self.token,
-                "Content-Type": "application/json"
-            }
+            headers = base_header
         )
         response = dict(r.json())
         pp.pprint(response)
@@ -208,10 +220,7 @@ class Player:
         r = requests.post(
             "https://lambda-treasure-hunt.herokuapp.com/api/adv/undress/",
             data = json.dumps({"name": [item]}),
-            headers = {
-                "Authorization": self.token,
-                "Content-Type": "application/json"
-            }
+            headers = base_header
         )
         response = dict(r.json())
         pp.pprint(response)
@@ -225,10 +234,7 @@ class Player:
                 "name": [new_name],
                 "confirm": "aye"
             }),
-            headers = {
-                "Authorization": self.token,
-                "Content-Type": "application/json"
-            }
+            headers = base_header
         )
         response = dict(r.json())
         pp.pprint(response)
@@ -238,10 +244,7 @@ class Player:
     def pray(self):
         r = requests.post(
             "https://lambda-treasure-hunt.herokuapp.com/api/adv/pray/",
-            headers = {
-                "Authorization": self.token,
-                "Content-Type": "application/json"
-            }
+            headers = base_header
         )
         response = dict(r.json())
         pp.pprint(response)
