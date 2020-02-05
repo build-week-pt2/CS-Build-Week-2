@@ -324,7 +324,7 @@ class Player:
                             self.pickup(movement['items'][i])
                             status = self.status()
             #go to shop and sell treasure
-            self.destination_travel('Shop')
+            self.destination_travel_id(1)
             status = self.status(show = False)
             for item in status['inventory']:
                 self.sell(item)
